@@ -1,0 +1,1 @@
+This repository has been created to provide participants of the APC pre-conference workshop "Exploring and Analyzing Satellite and Gridded Data on Climate and Population with R and Git Code Tracking" with the necessary materials for the workshop.
