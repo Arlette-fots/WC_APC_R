@@ -1,0 +1,470 @@
+---
+title: "R & Git Hands-on session : From gridded data to data frame"
+author: "Arlette Simo Fotso"
+format: html
+editor: visual
+---
+
+## Set up
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+-   Clone this [repository](https://github.com/Arlette-fots/WC_APC_R), or simply download the zip file
+
+-   Open the file `WC_APC_R.Rproj` included in this project folder
+
+    -   this will open RStudio in a new project environment.
+- The data set is provided during the WC for they are to heavy (you also have indications to download the data yourself from the slides provided)
+
+-   Open `Analysis.qmd` and begin following along with these code chunks
+
+-   Install any necessary packages if not already installed using this command
+
+```{r, results='hide'}
+# Installs any necessary packages if not already installed 
+for(
+  pkg in c(
+    "tidyverse", "sf", "terra", "ggspatial", "stars", "stringi", "exactextractr" #, "rasters"   "gtools",    "srvyr", "survey", "lme4", "broom.mixed", "broom", "remotes"
+  )
+){
+  if(!require(pkg, quietly = TRUE, character.only = TRUE)){
+    install.packages(pkg)
+  }
+}
+
+```
+
+## load libraries
+
+```{r}
+
+library(tidyverse)
+library(sf)
+library(terra)
+library(stars)
+library(ggspatial)
+library(stringi) # to remove latin accents 
+```
+
+## Raster files with terra package
+
+-   stars, raster and terra packages allows to read rasters
+
+-   [terra](https://rspatial.github.io/terra/) package has only one object class for raster data, SpatRaster
+
+-   A `SpatRaster` represents a spatially referenced surface divided into three dimensional cells (rows, columns, and layers).
+
+-   When a SpatRaster is created from a file, it does not load the cell (pixel) values into memory (RAM).
+
+-   It only reads the parameters that describe the geometry of the SpatRaster, such as the number of rows and columns and the coordinate reference system. The actual values will be read when needed.
+
+## Opening a single layer raster file
+
+We open the file `20230508.tif` located in the `chirps_tif2` folder with `rast` command
+
+```{r}
+prec_20230508 <- rast(here::here("data", "chirps_tif2",  "20230508.tif"))
+
+#prec_20230508 <- rast("data/chirps_tif2/20230508.tif") # works as well
+
+```
+
+Then we check the object created by displaying it
+
+```{r}
+prec_20230508
+```
+
+This output summaries the `.tif` file for August 5, 2023 (2023/05/08). Notice that there is:
+
+-   181 rows of pixels
+-   230 columns of pixels
+-   1 *layer* named `20230508`
+
+## Ploting the raster with ggplot/ggspatial
+
+```{r}
+
+ggplot() +
+    layer_spatial(
+    prec_20230508
+  ) +
+theme_minimal()
+```
+
+## Opening the shapefile of Senegal using sf package
+
+```{r}
+senegal <- st_read(  here::here("data", "shapefile_SEN", "gadm41_SEN_2.shp") )
+
+```
+
+## And plot with ggplot/ggspatial
+
+```{r}
+
+ggplot() +
+    layer_spatial(
+    senegal,
+    fill = NA
+  ) +
+theme_minimal() # theme_void()
+
+```
+
+## Mapping both objects
+
+```{r}
+
+ggplot() +
+    layer_spatial(
+    prec_20230508
+  ) +
+    layer_spatial(
+    senegal,
+    fill = NA,
+color= "red"
+  ) +
+  theme_minimal()
+```
+
+## Checking CRS
+
+### CRS shapefile senegal
+
+```{r}
+st_crs(senegal)
+```
+
+### CRS raster prec_20230508
+
+```{r}
+st_crs(prec_20230508)
+```
+
+-   Should be done at the beginning!
+
+## Example of working with object with differents CRS
+
+Load a new shapefile of senegal
+
+```{r}
+senegal_test <- st_read( here::here("data", "shapefile_SEN_test", "gadm41_SEN_3.shp"))
+
+```
+
+Open the .tif file as a raster instead of spatraster using starts package
+
+```{r}
+prec_20230508_rast <- read_stars(here::here("data", "chirps_tif2",  "20230508.tif"))
+#checking crs
+st_crs(prec_20230508_rast)
+```
+
+## And we plot with the stars and sf package
+
+```{r}
+
+ggplot() +
+    geom_stars(
+    data= prec_20230508_rast
+  ) +
+    geom_sf(
+    data=senegal_test,
+    fill = NA,
+color= "red"
+  ) +
+  theme_minimal()
+```
+
+## Solving projection issues
+
+-   Transforming crs of the vector file
+
+```{r}
+senegal_test_project <- st_transform (senegal_test, st_crs(prec_20230508_rast) )
+# could also use the EPSG coresonding using the following command
+#senegal_test_project <- st_transform (senegal_test, crs =  )
+
+```
+
+### CRS shapefile senegal
+
+```{r}
+st_crs(senegal_test_project)
+```
+
+### CRS of the raster
+
+```{r}
+st_crs(prec_20230508_rast)
+```
+
+## Ploting again with the projected shape file using stars and sf apackage
+
+```{r}
+ggplot() +
+    geom_stars(
+    data= prec_20230508_rast
+  ) +
+    geom_sf(
+    data=senegal_test_project,
+    fill = NA,
+color="red"
+  ) +
+  theme_minimal()
+```
+
+## `ggspatial` takes care of reprojecting the raster such that it aligns with other datasets
+
+```{r}
+
+ggplot() +
+    layer_spatial(
+    prec_20230508
+  ) +
+    layer_spatial(
+    senegal_test,
+fill=NA,
+color="red"
+  ) +
+  theme_minimal()
+```
+
+## Croping a raster
+
+-   It is important to have the same CRS here
+
+-   It will not work otherwise. The command bellow gives an error message
+
+```{r}
+#prec_20230508_crop  <- crop(prec_20230508, senegal_test)
+```
+
+-   The one bellow works because the 2 objects have the same CRS
+
+```{r}
+prec_20230508_crop  <- crop(prec_20230508, senegal)
+prec_20230508_crop
+prec_20230508
+
+```
+
+## Saving raster data
+
+-   Sometime you may want to save cropped raster data or some data modified
+
+```{r}
+terra::writeRaster(prec_20230508_crop, here::here("data", "modified_data", "prec_20230508_crop.tif"), filetype = "GTiff" ,  overwrite=TRUE)
+```
+
+## Extracting raster values for a polygon
+
+-   `exactextract` package provides a fast and accurate algorithm for summarizing values in the portion of a raster dataset that is covered by a polygon,
+-   Unlike other zonal statistics implementations, it takes into account raster cells that are partially covered by the polygon
+
+```{r}
+prec_by_districts <- exactextractr::exact_extract(
+  prec_20230508, 
+  senegal, 
+  fun = "mean"
+) %>% 
+as.data.frame() %>%
+  dplyr::rename_with(
+    ~ifelse(
+      stringr::str_detect(.x, "\\."), 
+      paste0("chirps")
+    )
+  ) #%>%
+  # bind_cols(senegal, .)
+summary(prec_by_districts)
+```
+
+-   So, extract() returns a data.frame, where ID values represent the corresponding row number in the polygons data.
+
+## Summary of the values
+
+```{r}
+summary(prec_by_districts)
+```
+
+## Working with multilayer raster
+
+You can stack multiple raster layers of the same spatial resolution and extent to create a RasterStack using raster::stack() or RasterBrick using raster::brick().
+
+Bur rast of `terra` package is more powerful
+
+Often times, processing a multi-layer object has computational advantages over processing multiple single-layer one by on
+
+```{r}
+#--- the list of path to the files ---#
+files_list <- c("data/chirps_tif2/20200131.tif", "data/chirps_tif2/20200201.tif")
+
+#--- read the two at the same time ---#
+
+  multi_layerraster<- rast(files_list)
+multi_layerraster
+
+```
+
+## Working with all files in a single folder as a list
+
+```{r}
+#first import all files in a single folder as a list 
+rastlist <- list.files(path = "data/chirps_tif2", pattern='.tif$', all.files= T, full.names= T)
+#--- read the all at the same time ---#
+allprec <- terra::rast(rastlist)
+allprec
+```
+
+## Or better create one multi-layered raster for each year
+
+```{r}
+# first we create a year list
+years <- map(2020:2023, ~{
+  list.files("data/chirps_tif2/", pattern = paste0("^", .x), full.names = TRUE)
+})
+
+# rename the list
+years <- set_names(years, 2020:2023) 
+
+
+#create a multi-layer raster per year and store all years in one large list
+
+years <- years %>% map(~.x %>% rast)
+
+```
+
+```{r}
+years$`2020`
+```
+
+## Yearly rainfall accumulation
+
+```{r}
+# for a sigle year
+years$`2020` %>% sum()
+```
+
+```{r}
+#More efficiently, we’ll apply the same sum function to every year in our list
+chirps_yearly_sum <- map(years, ~.x %>% sum)
+```
+
+## Creating a raster of 1 layer per year
+
+```{r}
+chirps_yearly_sum <- rast(chirps_yearly_sum)
+chirps_yearly_sum
+```
+
+For every pixel (0.05 degrees lat by 0.05 degree lon), we now have the total seasonal rainfall accumulation for every year 2020-2023.
+
+## Let us plot it for 2020
+
+```{r}
+ggplot() + 
+  layer_spatial(mask(chirps_yearly_sum$`2020`, vect(senegal), touches = FALSE)) + 
+  layer_spatial(senegal, alpha = 0) +
+  theme_minimal() + 
+  scale_fill_gradient2(low = "#D72B22", high = "#4375B7", na.value = "transparent") + 
+  labs(fill = "Total precipitation (2020)")
+```
+
+## We can now extract the values per districts or any area of interest for our study
+
+We extract mean values by districts, rename columns and merge with senegal borders shapefile
+
+```{r}
+tot_yearly_prec_by_dep <- exactextractr::exact_extract(
+  chirps_yearly_sum, 
+  senegal, 
+  fun = "mean"
+) %>% 
+  dplyr::rename_with(
+    ~ifelse(
+      stringr::str_detect(.x, "\\."), 
+      paste0("chirps", .)
+    )
+  ) %>%
+   bind_cols(senegal, .)
+#summary(chirps_yearly_sum)
+class(tot_yearly_prec_by_dep)
+```
+
+## We now want to merge with a demographic data by *departement*
+
+We first load the demodata
+
+```{r}
+load(here::here("data", "demodata",  "demodata.Rda"))
+```
+
+We check the *departement* variable in the 2 datasets
+
+### In demodata
+
+```{r}
+length(unique(demodata$DEPARTEMENT ))
+table(demodata$DEPARTEMENT)
+```
+
+### In tot_yearly_prec_by_dep data
+
+```{r}
+length(unique(tot_yearly_prec_by_dep$NAME_2 ))
+table(tot_yearly_prec_by_dep$NAME_2)
+```
+
+## Correct department string before the merge
+
+-   The name of our demodata is uppercase while in precipitation data it is lowercase
+
+-   We also need to correct some names written differently in the 2 datasets
+
+```{r}
+
+# We transform tot_yearly_prec_by_dep *departement* names to upper case and remove accents
+
+tot_yearly_prec_by_dep$DEPARTEMENT = stri_trans_general(str = tot_yearly_prec_by_dep$NAME_2, id = "Latin-ASCII") %>% 
+      str_to_upper 
+```
+
+```{r}
+  
+# We correct inconsistent names
+
+tot_yearly_prec_by_dep <- tot_yearly_prec_by_dep %>% 
+mutate(DEPARTEMENT =case_when( DEPARTEMENT== "BIRKILANE" ~ "BIRKELANE",
+                              DEPARTEMENT== "KOUPENTOUM" ~ "KOUMPENTOUM",
+                              DEPARTEMENT== "MALEME HODAR" ~ "MALEM HODDAR",
+                              DEPARTEMENT== "MEDINA YORO FOULA" ~ "MEDI0 YORO FOULAH",
+                              DEPARTEMENT== "NIORO DU RIP" ~ "NIORO",
+                              DEPARTEMENT== "RANEROU FERLO" ~ "RANEROU",
+                              TRUE ~ DEPARTEMENT
+  ))
+```
+
+## We can now merge our precipitation data with our demodata
+
+```{r}
+df_merged <-full_join(tot_yearly_prec_by_dep, demodata,  by="DEPARTEMENT")
+length(unique(df_merged$DEPARTEMENT))
+class(df_merged)
+```
+
+## Save the datasets to work later with it
+
+```{r}
+
+save(df_merged, senegal, file="data/modified_data/df_merged.Rda")
+
+
+ st_write(
+  senegal,
+  here::here("data", "modified_data",  "senegal.geojson"),
+  delete_dsn = TRUE
+) 
+```
