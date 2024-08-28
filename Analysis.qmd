@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 -   Open the file `WC_APC_R.Rproj` included in this project folder
 
     -   this will open RStudio in a new project environment.
-- The data set is provided during the WC for they are to heavy (you also have indications to download the data yourself from the slides provided)
+- The data sets are provided during the workshop because they are too heavy (you also have indications to download the data yourself from the slides_wc_R.htlm presentation provided)
 
 -   Open `Analysis.qmd` and begin following along with these code chunks
 
